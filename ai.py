@@ -27,13 +27,12 @@ def extract_features(image):
     return feature / 255.0
 
 
-def process_image(path: str) -> str | None:
-    im = cv2.imread(path)
+def process_image(im) -> str | None:
     gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(im, 1.3, 5)
 
     if len(faces) == 0:
-        return "unknown"
+        return None
 
     try:
         for p, q, r, s in faces:
@@ -45,4 +44,4 @@ def process_image(path: str) -> str | None:
             prediction_label = labels[pred.argmax()]
             return prediction_label
     except cv2.error:
-        return "unknown"
+        return None
