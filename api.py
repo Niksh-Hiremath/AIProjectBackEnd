@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Header, HTTPException, Body
+from fastapi import APIRouter, Header, HTTPException
 from typing import Annotated
 from dotenv import load_dotenv
 import os
 from uuid import uuid4
 from collections import defaultdict
-from pathlib import Path
+from pydantic import BaseModel, Field
+
+# from pathlib import Path
 import base64
 import numpy as np
 import cv2
@@ -15,8 +17,8 @@ load_dotenv()
 
 AUTHORIZATION_KEY = os.getenv("AUTHORIZATION_KEY")
 
-UPLOAD_DIR = Path("./uploaded_images")
-UPLOAD_DIR.mkdir(exist_ok=True)
+# UPLOAD_DIR = Path("./uploaded_images")
+# UPLOAD_DIR.mkdir(exist_ok=True)
 
 router = APIRouter()
 
@@ -25,20 +27,20 @@ sessions: dict[str, dict[str, int]] = {}
 
 @router.put("/start", description="Starts processor")
 async def start(
-    authorization: Annotated[str, Header("Authorization")],
+    authorization: Annotated[str, Header(alias="Authorization")],
 ):
     if authorization != AUTHORIZATION_KEY:
         return HTTPException(status_code=401, detail="Unauthorized")
 
     session_id = str(uuid4())
     sessions[session_id] = defaultdict(int)
-    return {"session_id": session_id}
+    return {"SessionId": session_id}
 
 
 @router.delete("/stop", description="Stops processor and returns the result")
 async def stop(
-    authorization: Annotated[str, Header("Authorization")],
-    session_id: Annotated[str, Header("SessionId")],
+    authorization: Annotated[str, Header(alias="Authorization")],
+    session_id: Annotated[str, Header(alias="SessionId")],
 ):
     if authorization != AUTHORIZATION_KEY:
         return HTTPException(status_code=401, detail="Unauthorized")
@@ -48,6 +50,9 @@ async def stop(
     results = sessions[session_id]
     del sessions[session_id]
 
+    if not results:
+        raise HTTPException(status_code=400, detail="No results found")
+
     emotion: str = max(results, key=results.get)
 
     return {
@@ -56,16 +61,26 @@ async def stop(
     }
 
 
+class ProcessImageRequest(BaseModel):
+    imageData: str = Field(
+        ...,
+        description="Base64 encoded image with data URI prefix",
+        min_length=1,
+    )
+
+
 @router.post("/process", description="Processes the image and saves the result")
 async def process(
     authorization: Annotated[str, Header(alias="Authorization")],
     session_id: Annotated[str, Header(alias="SessionId")],
-    image_data: Annotated[str, Body(alias="imageData")],
+    request: ProcessImageRequest,
 ):
     if authorization != AUTHORIZATION_KEY:
         return HTTPException(status_code=401, detail="Unauthorized")
     if session_id not in sessions:
         return HTTPException(status_code=404, detail="Session not found")
+
+    image_data = request.imageData
 
     if not image_data.startswith("data:image/"):
         raise HTTPException(status_code=400, detail="Invalid image data format")
