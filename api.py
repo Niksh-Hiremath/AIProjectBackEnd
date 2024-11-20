@@ -3,13 +3,12 @@ from typing import Annotated
 from dotenv import load_dotenv
 import os
 from uuid import uuid4
-from collections import defaultdict
 from pydantic import BaseModel, Field
-
-# from pathlib import Path
+from pathlib import Path
 import base64
 import numpy as np
 import cv2
+import os
 
 from ai import process_image
 
@@ -17,12 +16,12 @@ load_dotenv()
 
 AUTHORIZATION_KEY = os.getenv("AUTHORIZATION_KEY")
 
-# UPLOAD_DIR = Path("./uploaded_images")
-# UPLOAD_DIR.mkdir(exist_ok=True)
+UPLOAD_DIR = Path("./uploaded_images")
+UPLOAD_DIR.mkdir(exist_ok=True)
 
 router = APIRouter()
 
-sessions: dict[str, dict[str, int]] = {}
+sessions: dict[str, dict[str, float]] = {}
 
 
 @router.put("/start", description="Starts processor")
@@ -33,7 +32,7 @@ async def start(
         return HTTPException(status_code=401, detail="Unauthorized")
 
     session_id = str(uuid4())
-    sessions[session_id] = defaultdict(int)
+    sessions[session_id] = {}
     return {"SessionId": session_id}
 
 
@@ -53,11 +52,12 @@ async def stop(
     if not results:
         raise HTTPException(status_code=400, detail="No results found")
 
-    emotion: str = max(results, key=results.get)
+    del results["neutral"]
+    emotion, confidence = max(results.items(), key=lambda x: x[1])
 
     return {
         "emotion": emotion,
-        "confidence": results[emotion] / sum(results.values()),
+        "confidence": confidence,
     }
 
 
@@ -88,26 +88,31 @@ async def process(
     header, base64_str = image_data.split(",", 1)
     image_bytes = base64.b64decode(base64_str)
 
-    # file_extension = header.split(";")[0].split("/")[1]
-    # filename = f"{session_id}-{uuid4()}.{file_extension}"
-    # file_path = UPLOAD_DIR / filename
-
-    # with open(file_path, "wb") as f:
-    #     f.write(image_bytes)
-
     nparr = np.frombuffer(image_bytes, np.uint8)
     im = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
     if im is None:
         raise HTTPException(status_code=400, detail="Could not decode image")
 
-    emotion = process_image(im)
+    file_extension = header.split(";")[0].split("/")[1]
+    filename = f"{session_id}-{uuid4()}.{file_extension}"
+    file_path = UPLOAD_DIR / filename
 
-    if emotion is None:
-        raise HTTPException(
-            status_code=400, detail="No face detected or could not process image"
-        )
+    cv2.imwrite(str(file_path), im)
 
-    sessions[session_id][emotion] += 1
+    result = process_image(file_path)
 
-    return {"emotion": emotion}
+    try:
+        os.remove(file_path)
+    except FileNotFoundError:
+        pass
+
+    for emotion, confidence in result.items():
+        if emotion not in sessions[session_id]:
+            sessions[session_id][emotion] = float(confidence)
+        else:
+            sessions[session_id][emotion] = max(
+                sessions[session_id][emotion], float(confidence)
+            )
+
+    return result
