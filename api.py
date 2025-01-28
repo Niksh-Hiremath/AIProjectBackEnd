@@ -9,6 +9,7 @@ import base64
 import numpy as np
 import cv2
 import os
+from pymongo import MongoClient
 
 from ai import process_image
 
@@ -20,8 +21,10 @@ UPLOAD_DIR = Path("./uploaded_images")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 router = APIRouter()
+mongo = MongoClient(os.getenv("MONGO"))
+db = mongo.data.results
 
-sessions: dict[str, dict[str, float]] = {}
+sessions = {}
 
 
 @router.put("/start", description="Starts processor")
@@ -32,7 +35,7 @@ async def start(
         return HTTPException(status_code=401, detail="Unauthorized")
 
     session_id = str(uuid4())
-    sessions[session_id] = {}
+    sessions[session_id] = {"io": [], "emo": {}}
     return {"SessionId": session_id}
 
 
@@ -52,8 +55,17 @@ async def stop(
     if not results:
         raise HTTPException(status_code=400, detail="No results found")
 
-    del results["neutral"]
-    emotion, confidence = max(results.items(), key=lambda x: x[1])
+    del results["emo"]["neutral"]
+    emotion, confidence = max(results["emo"].items(), key=lambda x: x[1])
+
+    db.insert_one(
+        {
+            "session_id": session_id,
+            "emotion": emotion,
+            "confidence": confidence,
+            "io": results["io"],
+        }
+    )
 
     return {
         "emotion": emotion,
@@ -107,12 +119,14 @@ async def process(
     except FileNotFoundError:
         pass
 
+    sessions[session_id]["io"].append(image_data)
+
     for emotion, confidence in result.items():
-        if emotion not in sessions[session_id]:
-            sessions[session_id][emotion] = float(confidence)
+        if emotion not in sessions[session_id]["emo"]:
+            sessions[session_id]["emo"][emotion] = float(confidence)
         else:
-            sessions[session_id][emotion] = max(
-                sessions[session_id][emotion], float(confidence)
+            sessions[session_id]["emo"][emotion] = max(
+                sessions[session_id]["emo"][emotion], float(confidence)
             )
 
     return result
