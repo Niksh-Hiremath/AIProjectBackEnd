@@ -163,3 +163,4 @@ cython_debug/
 
 dataset/*
 uploaded_images/*
+openface_output/*
