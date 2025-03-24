@@ -10,6 +10,7 @@ import numpy as np
 import cv2
 import os
 from pymongo import MongoClient
+import shutil
 
 import subprocess
 import pandas as pd
@@ -49,8 +50,13 @@ def process_image_facs(img_path: str):
     """
     Process an image using OpenFace to extract FACS Action Units
     """
+    if not OPENFACE_EXECUTABLE or not Path(OPENFACE_EXECUTABLE).exists():
+        print(f"OpenFace executable not found at: {OPENFACE_EXECUTABLE}")
+        return {"error": "OpenFace executable not configured correctly"}
+
     base_filename = Path(img_path).stem
-    output_file = OPENFACE_OUTPUT_DIR / f"{base_filename}.csv"
+    os.mkdir(OPENFACE_OUTPUT_DIR / base_filename)
+    output_file = (OPENFACE_OUTPUT_DIR / base_filename) / f"{base_filename}.csv"
 
     # Execute OpenFace
     command = [
@@ -58,14 +64,14 @@ def process_image_facs(img_path: str):
         "-f",
         img_path,
         "-out_dir",
-        str(OPENFACE_OUTPUT_DIR),
+        str(OPENFACE_OUTPUT_DIR / base_filename),
         "-au_static",
         "true",
     ]
 
     try:
-        subprocess.run(
-            command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        result = subprocess.run(
+            command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
         )
 
         # Read the output CSV file
@@ -83,8 +89,11 @@ def process_image_facs(img_path: str):
             }
 
             emotion = map_aus_to_emotion(au_values)
-
-            os.remove(str(output_file))
+            
+            try:
+                shutil.rmtree(str(OPENFACE_OUTPUT_DIR / base_filename), ignore_errors=True)
+            except Exception as e:
+                pass
 
             return {
                 "action_units": au_values,
@@ -180,6 +189,8 @@ def map_aus_to_emotion(aus):
     if "AU14" in aus:
         emotions["contempt"] = aus["AU14"]
 
+    print(emotions, aus)
+
     # Find the emotion with the highest score
     if any(emotions.values()):
         dominant_emotion = max(emotions.items(), key=lambda x: x[1])
@@ -252,7 +263,7 @@ async def stop(
             "confidence": confidence,
             "facs_emotion": facs_emotion,
             "facs_confidence": facs_confidence,
-            "io": results["io"],
+            # "io": results["io"],
         }
     )
 
@@ -319,13 +330,14 @@ async def process(
     # Store image data
     sessions[session_id]["io"].append(image_data)
 
-    # Store emotion results from DeepFace
+    # Store emotion results from DeepFace and convert numpy values to Python float
+    emotion_result = {k: float(v) for k, v in emotion_result.items()}
     for emotion, confidence in emotion_result.items():
         if emotion not in sessions[session_id]["emo"]:
-            sessions[session_id]["emo"][emotion] = float(confidence)
+            sessions[session_id]["emo"][emotion] = confidence
         else:
             sessions[session_id]["emo"][emotion] = max(
-                sessions[session_id]["emo"][emotion], float(confidence)
+                sessions[session_id]["emo"][emotion], confidence
             )
 
     # Store FACS results
@@ -349,12 +361,15 @@ async def process(
                 sessions[session_id]["facs"]["emotions"][emotion], float(confidence)
             )
 
+    facs_aus = facs_result.get("action_units", {})
+    facs_aus = {k: float(v) for k, v in facs_aus.items()}
+    
     return_dict = {
         "emotion": emotion_result,
         "facs": {
-            "action_units": facs_result.get("action_units", {}),
+            "action_units": facs_aus,
             "emotion": facs_result.get("emotion", "unknown"),
-            "confidence": facs_result.get("confidence", 0.0),
+            "confidence": float(facs_result.get("confidence", 0.0)),
         },
     }
 
