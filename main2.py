@@ -3,7 +3,8 @@ from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from api import router as api
+from api2 import router as api2
+from api3 import router as api3
 
 
 @asynccontextmanager
@@ -23,7 +24,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(api)
+app.include_router(api2)
+app.include_router(api3)
 
 
 if __name__ == "__main__":

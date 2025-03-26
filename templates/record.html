@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EmOcean</title>
+</head>
+<body>
+    <div class="container">
+        <h1>Read the Following text</h1>
+        <div class="text-container">
+            {{ text }}
+        </div>
+        
+        <div class="button-container">
+            <button id="startButton">Start</button>
+            <button id="stopButton" disabled>Stop</button>
+        </div>
+        
+        <div class="webcam-container">
+            <video id="webcam" autoplay playsinline style="display: none;"></video>
+            <canvas id="canvas" style="display: none;"></canvas>
+        </div>
+    </div>
+
+    <style>
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .text-container {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            line-height: 1.6;
+        }
+        .button-container {
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 20px;
+            margin-right: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        #startButton {
+            background-color: #4CAF50;
+            color: white;
+        }
+        #stopButton {
+            background-color: #f44336;
+            color: white;
+        }
+    </style>
+
+    <script>
+        let sessionId = null;
+        let intervalId = null;
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Initialize webcam
+        async function initWebcam() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                video.addEventListener('loadedmetadata', () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                });
+            } catch (error) {
+                console.error('Error accessing webcam:', error);
+                alert('Cannot access webcam. Please ensure you have granted permission.');
+            }
+        }
+
+        // Start session
+        async function startSession() {
+            try {
+                const response = await fetch('/start', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': '2514'
+                    },
+                    body: JSON.stringify({
+                        name: '{{ name }}',
+                        key: '{{ key }}'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    sessionId = data.SessionId;
+                    
+                    if (!sessionId) {
+                        console.error('No sessionId received');
+                        return;
+                    }
+                    
+                    startButton.disabled = true;
+                    stopButton.disabled = false;
+                    startCapturing();
+                } else {
+                    console.error('Failed to start session');
+                }
+            } catch (error) {
+                console.error('Error starting session:', error);
+            }
+        }
+
+        // Stop session
+        async function stopSession() {
+            if (!sessionId) return;
+            
+            try {
+                await fetch('/stop', {
+                    method: 'DELETE',
+                    headers: {
+                        'SessionId': sessionId,
+                        'Authorization': '2514'
+                    }
+                });
+                
+                clearInterval(intervalId);
+                startButton.disabled = false;
+                stopButton.disabled = true;
+                sessionId = null;
+                
+                // Redirect to thank you page
+                // window.location.href = '/thankyou';
+            } catch (error) {
+                console.error('Error stopping session:', error);
+            }
+        }
+
+        // Capture and send images
+        function startCapturing() {
+            intervalId = setInterval(captureAndSendImage, 1000);
+        }
+
+        // Capture and send a single image
+        async function captureAndSendImage() {
+            if (!sessionId) return;
+            
+            // Draw current video frame to canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Convert canvas to base64 image
+            const imageData = canvas.toDataURL('image/jpeg');
+
+            try {
+                await fetch('/process', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'SessionId': sessionId,
+                        'Authorization': '2514'
+                    },
+                    body: JSON.stringify( {'imageData': imageData} )
+                });
+            } catch (error) {
+                console.error('Error sending image:', error);
+            }
+        }
+
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', initWebcam);
+        startButton.addEventListener('click', startSession);
+        stopButton.addEventListener('click', stopSession);
+    </script>
+</body>
+</html>

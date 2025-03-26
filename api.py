@@ -8,7 +8,6 @@ from pathlib import Path
 import base64
 import numpy as np
 import cv2
-import os
 from pymongo import MongoClient
 import shutil
 
@@ -71,7 +70,11 @@ def process_image_facs(img_path: str):
 
     try:
         result = subprocess.run(
-            command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            command,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
 
         # Read the output CSV file
@@ -89,9 +92,11 @@ def process_image_facs(img_path: str):
             }
 
             emotion = map_aus_to_emotion(au_values)
-            
+
             try:
-                shutil.rmtree(str(OPENFACE_OUTPUT_DIR / base_filename), ignore_errors=True)
+                shutil.rmtree(
+                    str(OPENFACE_OUTPUT_DIR / base_filename), ignore_errors=True
+                )
             except Exception as e:
                 pass
 
@@ -363,7 +368,7 @@ async def process(
 
     facs_aus = facs_result.get("action_units", {})
     facs_aus = {k: float(v) for k, v in facs_aus.items()}
-    
+
     return_dict = {
         "emotion": emotion_result,
         "facs": {

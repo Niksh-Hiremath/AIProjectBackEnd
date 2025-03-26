@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EmOcean</title>
+</head>
+<body>
+    <h1>Hello</h1>
+    <p>Welcome to EmOcean</p>
+    <p>EmOcean is a web application that allows you to track your emotions in real-time.</p>
+    <div class="input-container">
+        <label for="nameInput">Enter your name:</label>
+        <input type="text" id="nameInput" placeholder="Your name">
+        <button onclick="startRecording()">Start</button>
+    </div>
+
+    <script>
+        function startRecording() {
+            const name = document.getElementById('nameInput').value.trim();
+            if (name) {
+                window.location.href = `/record?name=${encodeURIComponent(name)}`;
+            } else {
+                alert('Please enter your name');
+            }
+        }
+    </script>
+</body>
+</html>
