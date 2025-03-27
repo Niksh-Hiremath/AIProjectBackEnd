@@ -14,12 +14,33 @@
         
         <div class="button-container">
             <button id="startButton">Start</button>
-            <button id="stopButton" disabled>Stop</button>
+            <button id="stopButton" style="display: none;">Stop</button>
         </div>
         
         <div class="webcam-container">
             <video id="webcam" autoplay playsinline style="display: none;"></video>
             <canvas id="canvas" style="display: none;"></canvas>
+        </div>
+
+        <div id="questionsContainer" style="display: none;">
+            <h2>Answer the Questions</h2>
+            <form id="questionsForm">
+                {% for key, value in questions.items() %}
+                    <div class="question">
+                        <p><strong>{{ value.question }}</strong></p>
+                        {% if value.options %}
+                            {% for optKey, optValue in value.options.items() %}
+                                <label>
+                                    <input type="radio" name="{{ key }}" value="{{ optKey }}"> {{ optKey }}: {{ optValue }}
+                                </label><br>
+                            {% endfor %}
+                        {% else %}
+                            <textarea name="{{ key }}" rows="3" cols="50" placeholder="Write your answer..."></textarea>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                <button type="submit">Submit</button>
+            </form>
         </div>
     </div>
 
@@ -57,6 +78,13 @@
             background-color: #f44336;
             color: white;
         }
+        .question {
+            margin: 15px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
     </style>
 
     <script>
@@ -64,11 +92,11 @@
         let intervalId = null;
         const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
+        const questionsContainer = document.getElementById('questionsContainer');
         const video = document.getElementById('webcam');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
 
-        // Initialize webcam
         async function initWebcam() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -83,7 +111,6 @@
             }
         }
 
-        // Start session
         async function startSession() {
             try {
                 const response = await fetch('/start', {
@@ -107,8 +134,8 @@
                         return;
                     }
                     
-                    startButton.disabled = true;
-                    stopButton.disabled = false;
+                    startButton.style.display = 'none';
+                    stopButton.style.display = 'inline-block';
                     startCapturing();
                 } else {
                     console.error('Failed to start session');
@@ -118,7 +145,6 @@
             }
         }
 
-        // Stop session
         async function stopSession() {
             if (!sessionId) return;
             
@@ -130,32 +156,23 @@
                         'Authorization': '2514'
                     }
                 });
-                
+
                 clearInterval(intervalId);
-                startButton.disabled = false;
-                stopButton.disabled = true;
-                sessionId = null;
-                
-                // Redirect to thank you page
-                // window.location.href = '/thankyou';
+                stopButton.style.display = 'none';
+                questionsContainer.style.display = 'block';
             } catch (error) {
                 console.error('Error stopping session:', error);
             }
         }
 
-        // Capture and send images
         function startCapturing() {
             intervalId = setInterval(captureAndSendImage, 1000);
         }
 
-        // Capture and send a single image
         async function captureAndSendImage() {
             if (!sessionId) return;
-            
-            // Draw current video frame to canvas
+
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            // Convert canvas to base64 image
             const imageData = canvas.toDataURL('image/jpeg');
 
             try {
@@ -166,15 +183,42 @@
                         'SessionId': sessionId,
                         'Authorization': '2514'
                     },
-                    body: JSON.stringify( {'imageData': imageData} )
+                    body: JSON.stringify({ 'imageData': imageData })
                 });
             } catch (error) {
                 console.error('Error sending image:', error);
             }
         }
 
+        document.getElementById('questionsForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
 
-        // Event listeners
+            const formData = new FormData(event.target);
+            const answers = {};
+
+            for (let [key, value] of formData.entries()) {
+                answers[key] = value;
+            }
+
+            console.log({name: '{{ name }}', key: '{{ key }}', answers})
+
+            try {
+                await fetch('/submit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': '2514',
+                        'SessionId': sessionId,
+                    },
+                    body: JSON.stringify({name: '{{ name }}', key: '{{ key }}', answers})
+                });
+
+                alert('Answers submitted successfully!');
+            } catch (error) {
+                console.error('Error submitting answers:', error);
+            }
+        });
+
         document.addEventListener('DOMContentLoaded', initWebcam);
         startButton.addEventListener('click', startSession);
         stopButton.addEventListener('click', stopSession);

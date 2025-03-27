@@ -9,17 +9,28 @@
     <h1>Hello</h1>
     <p>Welcome to EmOcean</p>
     <p>EmOcean is a web application that allows you to track your emotions in real-time.</p>
+    <br />
     <div class="input-container">
         <label for="nameInput">Enter your name:</label>
         <input type="text" id="nameInput" placeholder="Your name">
+        <br />
+        <br />
+        <label for="emotionSelect">Select emotion:</label>
+        <select id="emotionSelect">
+            <option value="happy">Happy</option>
+            <option value="sad">Sad</option>
+        </select>
+        
         <button onclick="startRecording()">Start</button>
     </div>
 
     <script>
         function startRecording() {
             const name = document.getElementById('nameInput').value.trim();
+            const text = document.getElementById('emotionSelect').value;
+            
             if (name) {
-                window.location.href = `/record?name=${encodeURIComponent(name)}`;
+                window.location.href = `/record?name=${encodeURIComponent(name)}&text=${encodeURIComponent(text)}`;
             } else {
                 alert('Please enter your name');
             }

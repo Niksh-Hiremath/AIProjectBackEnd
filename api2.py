@@ -16,6 +16,7 @@ router = APIRouter()
 
 mongo = MongoClient(os.getenv("MONGO"))
 db = mongo.data.images
+db2 = mongo.data.questions
 
 sessions = {}
 
@@ -98,3 +99,31 @@ async def process(
     )
 
     return 200
+
+
+class SubmissionRequest(BaseModel):
+    name: str
+    key: str
+    answers: dict
+
+
+@router.post("/submit")
+async def submit_answers(
+    authorization: Annotated[str, Header(alias="Authorization")],
+    session_id: Annotated[str, Header(alias="SessionId")],
+    request: SubmissionRequest,
+):
+    if authorization != AUTHORIZATION_KEY:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    try:
+        submission_data = {
+            "name": request.name,
+            "session_id": session_id,
+            "key": request.key,
+            "answers": request.answers,
+        }
+        db2.insert_one(submission_data)
+        return {"message": "Submission saved successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
