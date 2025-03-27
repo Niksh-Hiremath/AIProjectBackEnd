@@ -63,7 +63,7 @@ QUESTIONS = {
             },
         },
         "Q2": {
-            "question": "What detail in the text most strongly suggests that Jack's visit was completely unexpected?",
+            "question": "Which of these details from the text most strongly suggests that Jack's visit was completely unexpected?",
             "options": {
                 "A": "Sarah was doing laundry when Jack arrived",
                 "B": "Sarah was wearing an apron when she answered the door",
